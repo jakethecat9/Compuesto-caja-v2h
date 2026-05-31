@@ -1,0 +1,177 @@
+--[[
+    HIT HEAD FINAL V3 - TOTAL FIX
+    Juego: 2 Player Hugs RP
+    Correcciones: Limpieza total de hitboxes y GUI unificada.
+]]
+
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local active = false
+local range = 10
+local showPart = true
+local targetNames = ""
+local isMinimized = false
+
+-- --- INTERFAZ UNIFICADA ---
+local ScreenGui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+ScreenGui.Name = "HitHeadV3"
+ScreenGui.ResetOnSpawn = false
+
+local MainFrame = Instance.new("Frame", ScreenGui)
+MainFrame.Size = UDim2.new(0, 220, 0, 300)
+MainFrame.Position = UDim2.new(0.5, -110, 0.4, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+MainFrame.BorderSizePixel = 2
+MainFrame.BorderColor3 = Color3.fromRGB(255, 255, 255)
+MainFrame.Active = true
+MainFrame.Draggable = true -- Mueve toda la GUI junta
+
+local Title = Instance.new("TextLabel", MainFrame)
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.Text = "hit head"
+Title.TextSize = 18
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+Title.BorderSizePixel = 0
+
+local ToggleGuiBtn = Instance.new("TextButton", MainFrame)
+ToggleGuiBtn.Size = UDim2.new(0, 35, 0, 35)
+ToggleGuiBtn.Position = UDim2.new(1, -35, 0, 0)
+ToggleGuiBtn.Text = "X"
+ToggleGuiBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+ToggleGuiBtn.TextColor3 = Color3.new(1, 1, 1)
+ToggleGuiBtn.ZIndex = 2
+
+local Content = Instance.new("Frame", MainFrame)
+Content.Size = UDim2.new(1, 0, 1, -35)
+Content.Position = UDim2.new(0, 0, 0, 35)
+Content.BackgroundTransparency = 1
+
+-- --- CONTROLES ---
+local function createButton(txt, pos, size, parent)
+    local btn = Instance.new("TextButton", parent)
+    btn.Text = txt
+    btn.Position = pos
+    btn.Size = size
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    return btn
+end
+
+local RangeLabel = Instance.new("TextLabel", Content)
+RangeLabel.Text = "Rango: " .. range
+RangeLabel.Position = UDim2.new(0, 10, 0, 10)
+RangeLabel.Size = UDim2.new(0, 100, 0, 25)
+RangeLabel.TextColor3 = Color3.new(1, 1, 1)
+RangeLabel.BackgroundTransparency = 1
+
+local btnMenos = createButton("-", UDim2.new(0, 110, 0, 10), UDim2.new(0, 45, 0, 25), Content)
+local btnMas = createButton("+", UDim2.new(0, 160, 0, 10), UDim2.new(0, 45, 0, 25), Content)
+
+local TargetInput = Instance.new("TextBox", Content)
+TargetInput.Size = UDim2.new(1, -20, 0, 35)
+TargetInput.Position = UDim2.new(0, 10, 0, 45)
+TargetInput.PlaceholderText = "Nombres (Espacio)"
+TargetInput.Text = ""
+TargetInput.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+TargetInput.TextColor3 = Color3.new(1, 1, 1)
+
+local CuboBtn = createButton("Cubo: Visible", UDim2.new(0, 10, 0, 90), UDim2.new(1, -20, 0, 35), Content)
+local StatusBtn = createButton("OFF [Y / Click]", UDim2.new(0, 10, 0, 135), UDim2.new(1, -20, 0, 35), Content)
+StatusBtn.BackgroundColor3 = Color3.fromRGB(100, 30, 30)
+local ColorBtn = createButton("Color Azar", UDim2.new(0, 10, 0, 180), UDim2.new(1, -20, 0, 35), Content)
+
+-- --- LÃ“GICA DE LIMPIEZA ---
+local function resetHead(player)
+    if player.Character and player.Character:FindFirstChild("Head") then
+        player.Character.Head.Size = Vector3.new(1, 1, 1)
+        player.Character.Head.Transparency = 0
+    end
+end
+
+local function resetAll()
+    for _, v in pairs(Players:GetPlayers()) do resetHead(v) end
+end
+
+-- --- EVENTOS ---
+ToggleGuiBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    Content.Visible = not isMinimized
+    MainFrame.Size = isMinimized and UDim2.new(0, 220, 0, 35) or UDim2.new(0, 220, 0, 300)
+    ToggleGuiBtn.Text = isMinimized and "O" or "X"
+end)
+
+local function toggleHitbox()
+    active = not active
+    if not active then resetAll() end
+    StatusBtn.Text = active and "ON [Activo]" or "OFF [Y / Click]"
+    StatusBtn.BackgroundColor3 = active and Color3.fromRGB(30, 100, 30) or Color3.fromRGB(100, 30, 30)
+end
+
+StatusBtn.MouseButton1Click:Connect(toggleHitbox)
+
+UIS.InputBegan:Connect(function(input, gpe)
+    if not gpe and input.KeyCode == Enum.KeyCode.Y then toggleHitbox() end
+end)
+
+CuboBtn.MouseButton1Click:Connect(function()
+    showPart = not showPart
+    CuboBtn.Text = showPart and "Cubo: Visible" or "Cubo: Oculto"
+    if active then resetAll() end -- Forzar refresco visual instantÃ¡neo
+end)
+
+ColorBtn.MouseButton1Click:Connect(function()
+    local c = Color3.new(math.random(), math.random(), math.random())
+    MainFrame.BorderColor3 = c
+    Title.BackgroundColor3 = c
+    ColorBtn.TextColor3 = c
+end)
+
+btnMas.MouseButton1Click:Connect(function()
+    if range < 20 then range = range + 1 end
+    RangeLabel.Text = "Rango: " .. range
+end)
+
+btnMenos.MouseButton1Click:Connect(function()
+    if range > 1 then range = range - 1 end
+    RangeLabel.Text = "Rango: " .. range
+end)
+
+-- BUCLE PRINCIPAL MEJORADO
+RunService.RenderStepped:Connect(function()
+    if not active then return end
+    
+    local targets = {}
+    for s in TargetInput.Text:gmatch("%S+") do table.insert(targets, s:lower()) end
+
+    for _, v in pairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("Head") then
+            local head = v.Character.Head
+            local isTargeted = false
+            
+            if #targets == 0 then
+                isTargeted = true
+            else
+                for _, name in pairs(targets) do
+                    if v.Name:lower():find(name) or (v.DisplayName and v.DisplayName:lower():find(name)) then
+                        isTargeted = true
+                        break
+                    end
+                end
+            end
+            
+            if isTargeted then
+                head.Size = Vector3.new(range, range, range)
+                head.Transparency = showPart and 0.5 or 1
+                head.CanCollide = false
+                head.Massless = true
+            else
+                head.Size = Vector3.new(1, 1, 1)
+                head.Transparency = 0
+            end
+        end
+    end
+end)
