@@ -5,19 +5,24 @@ local LocalPlayer = Players.LocalPlayer
 
 -- [ VARIABLES HITBOX ]
 local active = false
-local range = 10 -- Tamaño inicial por defecto
+local range = 9 
 local showPart = true
 local targetText = ""
 
 -- Variables para evitar spam de notificaciones
-local lastNotifiedSize = 10
+local lastNotifiedSize = 9
 local lastNotifiedTarget = ""
+
+-- Variables Movilidad
+local tpWalk = false
+local tpSpeed = 1
+local infJump = false
+local noClip = false
 
 -- --- LÓGICA DE LIMPIEZA ---
 local function resetHead(player)
     if player and player.Character and player.Character:FindFirstChild("Head") then
         local head = player.Character.Head
-        -- Tamaño estándar para no deformar al jugador al desactivar
         head.Size = Vector3.new(1.2, 1.2, 1.2) 
         head.Transparency = 0
         head.CanCollide = true
@@ -78,110 +83,140 @@ hT:Toggle({
     end
 })
 
--- [ CAJA DE TEXTO PARA EL TAMAÑO CON NOTIFICACIÓN ]
 hT:Input({
     Title = "Tamaño del Hitbox",
-    PlaceholderText = "Escribe un número (Ej: 15)",
+    PlaceholderText = "Ej: 15 (Deja vacío para volver a 9)",
     Callback = function(text)
-        local num = tonumber(text)
-        if num and num ~= lastNotifiedSize then
-            range = num
-            lastNotifiedSize = num
-            
-            W:Notify({
-                Title = "⚙️ Tamaño Actualizado",
-                Content = "Nuevo tamaño de hitbox asignado: " .. tostring(num),
-                Duration = 5
-            })
+        if text == "" or text == " " then
+            if lastNotifiedSize ~= 9 then
+                range = 9
+                lastNotifiedSize = 9
+                W:Notify({ Title = "⚙️ Tamaño Restaurado", Content = "Se regresó al tamaño por defecto: 9", Duration = 5 })
+            end
+        else
+            local num = tonumber(text)
+            if num and num ~= lastNotifiedSize then
+                range = num
+                lastNotifiedSize = num
+                W:Notify({ Title = "⚙️ Tamaño Actualizado", Content = "Nuevo tamaño asignado: " .. tostring(num), Duration = 5 })
+            end
         end
     end
 })
 
--- [ CAJA DE TEXTO PARA TARGET CON NOTIFICACIÓN ]
 hT:Input({
     Title = "Filtro de Jugadores",
-    PlaceholderText = "Nombres separados por espacio (Ej: Juan Pedro)",
+    PlaceholderText = "Iniciales o Nombres (Ej: Jua)",
     Callback = function(text)
         if text ~= lastNotifiedTarget then
             targetText = text
             lastNotifiedTarget = text
             
-            local mensaje = text == "" and "Filtro limpiado. Aplicando a todos." or "Objetivo(s) asignado(s): " .. text
-            
-            W:Notify({
-                Title = "🎯 Objetivo Actualizado",
-                Content = mensaje,
-                Duration = 5
-            })
+            if text == "" then
+                W:Notify({ Title = "🎯 Objetivo Limpiado", Content = "Aplicando a todos los jugadores del servidor.", Duration = 5 })
+            else
+                local partials = {}
+                for s in text:gmatch("%S+") do table.insert(partials, s:lower()) end
+                local foundNames = {}
+                for _, p in pairs(Players:GetPlayers()) do
+                    if p ~= LocalPlayer then
+                        for _, part in pairs(partials) do
+                            if (p.Name and p.Name:lower():find(part)) or (p.DisplayName and p.DisplayName:lower():find(part)) then
+                                table.insert(foundNames, p.DisplayName .. " (@" .. p.Name .. ")")
+                                break
+                            end
+                        end
+                    end
+                end
+                
+                if #foundNames > 0 then
+                    W:Notify({ Title = "🎯 Objetivo Detectado", Content = "Asignado a: " .. table.concat(foundNames, ", "), Duration = 5 })
+                else
+                    W:Notify({ Title = "❌ Usuario no encontrado", Content = "No se halló ningún jugador que coincida con: " .. text, Duration = 5 })
+                end
+            end
         end
     end
 })
 
+-- --- PESTAÑA: MOVILIDAD ---
+local mT = w:Tab({ Title = "Movilidad", Icon = "solar:run-bold" })
+mT:Toggle({ Title = "TpWalk", Value = tpWalk, Callback = function(s) tpWalk = s end })
+mT:Input({ Title = "Velocidad TpWalk", PlaceholderText = "1", Callback = function(t) tpSpeed = tonumber(t) or 1 end })
+mT:Toggle({ Title = "Infinity Jump", Value = infJump, Callback = function(s) infJump = s end })
+mT:Toggle({ Title = "Noclip", Value = noClip, Callback = function(s) noClip = s end })
+
 -- --- PESTAÑA: AJUSTES ---
 local sT = w:Tab({ Title = "Ajustes", Icon = "solar:settings-bold" })
-
 sT:Button({
     Title = "🛑 Destruir Script",
     Desc = "Limpia las cabezas y cierra la interfaz.",
     Color = Color3.fromRGB(255, 50, 50),
     Callback = function()
         active = false
+        tpWalk = false
+        infJump = false
+        noClip = false
         resetAll()
         if w and w.Destroy then w:Destroy() end
     end
 })
 
 -- --- EVENTOS Y BUCLE PRINCIPAL ---
-
--- Keybind Tecla Y
 UIS.InputBegan:Connect(function(input, gpe)
     if not gpe and input.KeyCode == Enum.KeyCode.Y then 
         active = not active
         if not active then resetAll() end
-        
-        W:Notify({
-            Title = "Hitbox Head",
-            Content = active and "✅ Activado con tecla Y" or "❌ Desactivado con tecla Y",
-            Duration = 3
-        })
+        W:Notify({ Title = "Hitbox Head", Content = active and "✅ Activado con tecla Y" or "❌ Desactivado con tecla Y", Duration = 3 })
     end
 end)
 
--- Bucle RenderStepped
+UIS.JumpRequest:Connect(function()
+    if infJump then LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping") end
+end)
+
 RunService.RenderStepped:Connect(function()
-    if not active then return end
-    
-    local targets = {}
-    if targetText and targetText ~= "" then
-        for s in targetText:gmatch("%S+") do 
-            table.insert(targets, s:lower()) 
+    -- Noclip
+    if LocalPlayer.Character then
+        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = not noClip end
         end
     end
 
-    for _, v in pairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("Head") then
-            local head = v.Character.Head
-            local isTargeted = false
-            
-            if #targets == 0 then
-                isTargeted = true
-            else
-                for _, name in pairs(targets) do
-                    if (v.Name and v.Name:lower():find(name)) or (v.DisplayName and v.DisplayName:lower():find(name)) then
-                        isTargeted = true
-                        break
+    -- TpWalk
+    if tpWalk and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = LocalPlayer.Character.HumanoidRootPart
+        local moveDir = LocalPlayer.Character.Humanoid.MoveDirection
+        if moveDir.Magnitude > 0 then hrp.CFrame = hrp.CFrame + (moveDir * tpSpeed) end
+    end
+
+    -- Hitbox
+    if active then
+        local targets = {}
+        if targetText and targetText ~= "" then
+            for s in targetText:gmatch("%S+") do table.insert(targets, s:lower()) end
+        end
+        for _, v in pairs(Players:GetPlayers()) do
+            if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("Head") then
+                local head = v.Character.Head
+                local isTargeted = (#targets == 0)
+                if not isTargeted then
+                    for _, name in pairs(targets) do
+                        if (v.Name and v.Name:lower():find(name)) or (v.DisplayName and v.DisplayName:lower():find(name)) then
+                            isTargeted = true
+                            break
+                        end
                     end
                 end
-            end
-            
-            if isTargeted then
-                head.Size = Vector3.new(range, range, range)
-                head.Transparency = showPart and 0.5 or 1
-                head.CanCollide = false
-                head.Massless = true
-            else
-                head.Size = Vector3.new(1.2, 1.2, 1.2)
-                head.Transparency = 0
+                if isTargeted then
+                    head.Size = Vector3.new(range, range, range)
+                    head.Transparency = showPart and 0.5 or 1
+                    head.CanCollide = false
+                    head.Massless = true
+                else
+                    head.Size = Vector3.new(1.2, 1.2, 1.2)
+                    head.Transparency = 0
+                end
             end
         end
     end
